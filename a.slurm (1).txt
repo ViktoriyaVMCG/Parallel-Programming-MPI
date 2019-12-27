@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+#SBATCH --job-name=test
+#SBATCH --output result.txt
+#SBATCH -e test.err
+#
+#SBATCH --ntasks-per-node 4
+#SBATCH --time 10:00
+#SBATCH --nodes 1
+#SBATCH -p qGPU
+#SBATCH --mem-per-cpu=3000
+#SBATCH --gres=gpu:1
+#SBATCH -x blue[31-32]
+
+#ebvironment
+module load Compilers/mvapich2_ACoRE
+
+#Execute
+srun --mpi=pmi2 ./a.out
+
+
+

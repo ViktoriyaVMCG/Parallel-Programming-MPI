@@ -1,0 +1,155 @@
+#include <mpi.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+#include <iostream> 
+
+using namespace std; 
+
+int main(int argc, char **argv) {  
+    
+int x = 0;  double kk;  int proces;     
+int numprocs;   
+int prawy_sasiad, lewy_sasiad, gorny_sasiad, dolny_sasiad;  
+int tag = 99;
+
+static const int n = 6; 
+const int PP = 2; 
+int A[n][n] = {}, B[n][n] = {};
+
+int z = 1;
+for (int i = 0; i < n; i++) {
+    for (int j = 0; j < n; j++) {
+        A[i][j] = z;
+        z = z + 1;
+    }
+}
+
+z = 0;
+for (int i = 0; i < n; i++) {
+    for (int j = 0; j < n; j++) {
+        B[i][j] = z;
+        z = z + 2;
+    }
+}
+
+MPI_Status  statRecv2;
+MPI_Request reqSend2, reqRecv2;
+MPI_Status  statRecv[2];
+MPI_Request reqSend[2], reqRecv[2];
+MPI_Init(0, 0);
+MPI_Comm_rank(MPI_COMM_WORLD, &proces);
+MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+int pra[n / PP][n / PP] = {}, psa[n / PP][n / PP] = {};
+int prb[n / PP][n / PP] = {}, psb[n / PP][n / PP] = {};
+
+int C[n][n] = {};
+for (int i = 0; i < n / PP; i++){
+    for (int j = 0; j < n / PP; j++){
+        psa[i][j] = A[proces / PP*(n / PP) + i][proces%PP*(n / PP) + j];
+        psb[i][j] = B[proces / PP*(n / PP) + i][proces%PP*(n / PP) + j];
+    }
+}
+
+double np = numprocs;
+kk = sqrt(np);
+int k = (int)kk;
+
+if (proces < k){
+    lewy_sasiad = (proces + k - 1) % k;
+    prawy_sasiad = (proces + k + 1) % k;
+    gorny_sasiad = ((k - 1)*k) + proces;
+}
+if (proces == k){
+    lewy_sasiad = ((proces + k - 1) % k) + k;
+    prawy_sasiad = ((proces + k + 1) % k) + k;
+    gorny_sasiad = proces - k;
+}
+if (proces > k){
+    x = proces / k;
+    lewy_sasiad = ((proces + k - 1) % k) + x * k;
+    prawy_sasiad = ((proces + k + 1) % k) + x * k;
+    gorny_sasiad = proces - k;
+}
+if (proces == 0 || (proces / k) < (k - 1)){
+    dolny_sasiad = proces + k;
+}
+if ((proces / k) == (k - 1)){
+    dolny_sasiad = proces - ((k - 1)*k);
+}
+x = 0;
+int p = 0;
+do{ 
+    if (p < proces / PP){
+
+        MPI_Irecv(pra, n*n / PP / PP, MPI_FLOAT, prawy_sasiad, tag, MPI_COMM_WORLD, &reqRecv2);
+        MPI_Isend(psa, n*n / PP / PP, MPI_FLOAT, lewy_sasiad, tag, MPI_COMM_WORLD, &reqSend2);
+        MPI_Wait(&reqRecv2, &statRecv2);
+        for (int i = 0; i < n / PP; i++){
+            for (int j = 0; j < n / PP; j++){
+                psa[i][j] = pra[i][j];
+            }
+        }
+}
+    MPI_Barrier(MPI_COMM_WORLD);
+if (p < proces % PP){
+    MPI_Irecv(prb, n*n / PP / PP, MPI_FLOAT, dolny_sasiad, tag, MPI_COMM_WORLD, &reqRecv2);
+    MPI_Isend(psb, n*n / PP / PP, MPI_FLOAT, gorny_sasiad, tag, MPI_COMM_WORLD, &reqSend2);
+    MPI_Wait(&reqRecv2, &statRecv2);
+    for (int i = 0; i < n / PP; i++){
+        for (int j = 0; j < n / PP; j++){
+            psb[i][j] = prb[i][j];
+        }
+    }
+
+}
+MPI_Barrier(MPI_COMM_WORLD);
+p++;
+} while (p < n);
+
+
+for (int kkk = 0; kkk < PP; kkk++){
+    for (int i = 0; i < n / PP; i++){
+        for (int j = 0; j < n / PP; j++){
+            for (int k = 0; k < n / PP; k++){
+                C[i][j] += psa[i][k] * psb[k][j];
+            }
+        }
+    }
+
+
+    MPI_Irecv(pra, n*n / PP / PP, MPI_FLOAT, prawy_sasiad, tag, MPI_COMM_WORLD, reqRecv);
+    MPI_Irecv(prb, n*n / PP / PP, MPI_FLOAT, dolny_sasiad, tag, MPI_COMM_WORLD, &reqRecv[1]);
+    MPI_Isend(psa, n*n / PP / PP, MPI_FLOAT, lewy_sasiad, tag, MPI_COMM_WORLD, reqSend);
+    MPI_Isend(psb, n*n / PP / PP, MPI_FLOAT, gorny_sasiad, tag, MPI_COMM_WORLD, &reqSend[1]);
+    MPI_Wait(reqRecv, statRecv);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    for (int i = 0; i < n / PP; i++){
+        for (int j = 0; j < n / PP; j++){
+            psa[i][j] = pra[i][j];
+        }
+    }
+
+
+    for (int i = 0; i < n / PP; i++){
+        for (int j = 0; j < n / PP; j++){
+            psb[i][j] = prb[i][j];
+        }
+    }
+
+
+}
+
+
+cout << "Proces: " << proces << " \n";
+for (int i = 0; i < n / PP; i++){
+    for (int j = 0; j < n / PP; j++){
+        cout << C[i][j] << " ";
+    }
+    cout << endl;
+}
+
+MPI_Finalize();
+return 0;
+}
